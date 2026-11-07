@@ -1,8 +1,8 @@
 class Updiff < Formula
   desc "See what a macOS app update actually changed inside the app"
   homepage "https://github.com/intincrab/updiff"
-  url "https://github.com/intincrab/updiff/releases/download/v0.1.1/updiff-0.1.1.tgz"
-  sha256 "6ee08c3e257c35691a203050f01712721195fa575ae47d237d17008f6ce4871d"
+  url "https://github.com/intincrab/updiff/releases/download/v0.2.0/updiff-0.2.0.tgz"
+  sha256 "490c58264473762a27d97c5d94b22cb5b7de01a2d0566a5fa49c826f3bd6d838"
   license "MIT"
 
   depends_on :macos
