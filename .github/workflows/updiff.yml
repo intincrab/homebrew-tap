@@ -1,0 +1,75 @@
+name: updiff
+
+# Keeps Formula/updiff.rb on the latest intincrab/updiff release, then installs and
+# tests it on macOS. Runs every few hours, on demand, and whenever the formula changes.
+
+on:
+  schedule:
+    - cron: '17 */4 * * *'
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths: ['Formula/**', '.github/workflows/updiff.yml']
+  pull_request:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: updiff-formula
+  cancel-in-progress: false
+
+jobs:
+  bump:
+    name: Follow the latest release
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Update the formula
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          tag="$(gh api repos/intincrab/updiff/releases/latest --jq .tag_name)"
+          version="${tag#v}"
+          current="$(sed -nE 's#.*/updiff-([^"/]+)\.tgz".*#\1#p' Formula/updiff.rb)"
+          if [ "$version" = "$current" ]; then
+            echo "Formula is already at $current."
+            exit 0
+          fi
+          url="https://github.com/intincrab/updiff/releases/download/$tag/updiff-$version.tgz"
+          curl -fsSL "$url" -o updiff.tgz
+          sha="$(sha256sum updiff.tgz | cut -d' ' -f1)"
+          sed -i -E "s#^  url \".*\"#  url \"$url\"#; s#^  sha256 \".*\"#  sha256 \"$sha\"#" Formula/updiff.rb
+          git config user.name "homebrew-tap[bot]"
+          git config user.email "homebrew-tap@users.noreply.github.com"
+          git commit -am "updiff $version"
+          git push
+
+  test:
+    name: Install and test on macOS
+    needs: bump
+    if: ${{ !failure() && !cancelled() }}
+    runs-on: macos-15
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          # After a bump, test the commit that was just pushed.
+          ref: ${{ github.event_name == 'pull_request' && github.sha || 'main' }}
+          # `brew tap` clones this checkout, and a shallow repository can't be cloned.
+          fetch-depth: 0
+
+      - name: Tap this checkout
+        run: brew tap intincrab/tap "$GITHUB_WORKSPACE"
+
+      - name: Install
+        run: brew install intincrab/tap/updiff
+
+      - name: Test
+        run: |
+          brew test intincrab/tap/updiff
+          updiff --version
+          brew audit --strict intincrab/tap/updiff
